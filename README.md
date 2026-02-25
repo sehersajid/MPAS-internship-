@@ -1,60 +1,70 @@
-MPAS-v8.3.1
-====
-
-The Model for Prediction Across Scales (MPAS) is a collaborative project for
-developing atmosphere, ocean, and other earth-system simulation components for
-use in climate, regional climate, and weather studies. The primary development
-partners are the climate modeling group at Los Alamos National Laboratory
-(COSIM) and the National Center for Atmospheric Research. Both primary
-partners are responsible for the MPAS framework, operators, and tools common to
-the applications; LANL has primary responsibility for the ocean model, and NCAR
-has primary responsibility for the atmospheric model.
-
-The MPAS framework facilitates the rapid development and prototyping of models
-by providing infrastructure typically required by model developers, including
-high-level data types, communication routines, and I/O routines. By using MPAS,
-developers can leverage pre-existing code and focus more on development of
-their model.
-
-BUILDING
-========
-
-This README is provided as a brief introduction to the MPAS framework. It does
-not provide details about each specific model, nor does it provide building
-instructions.
-
-For information about building and running each core, please refer to each
-core's user's guide, which can be found at the following web sites:
-
-[MPAS-Atmosphere](http://mpas-dev.github.io/atmosphere/atmosphere_download.html)
-
-[MPAS-Albany Land Ice](http://mpas-dev.github.io/land_ice/download.html)
-
-[MPAS-Ocean](http://mpas-dev.github.io/ocean/releases.html)
-
-[MPAS-Seaice](http://mpas-dev.github.io/sea_ice/releases.html)
-
-
-Code Layout
-----------
-
-Within the MPAS repository, code is laid out as follows. Sub-directories are
-only described below the src directory.
-
-	MPAS-Model
-	├── src
-	│   ├── driver -- Main driver for MPAS in stand-alone mode (Shared)
-	│   ├── external -- External software for MPAS (Shared)
-	│   ├── framework -- MPAS Framework (Includes DDT Descriptions, and shared routines. Shared)
-	│   ├── operators -- MPAS Opeartors (Includes Operators for MPAS meshes. Shared)
-	│   ├── tools -- Empty directory for include files that Registry generates (Shared)
-	│   │   ├── registry -- Code for building Registry.xml parser (Shared)
-	│   │   └── input_gen -- Code for generating streams and namelist files (Shared)
-	│   └── core_* -- Individual model cores.
-	│       └── inc -- Empty directory for include files that Registry generates
-	├── testing_and_setup -- Tools for setting up configurations and test cases (Shared)
-	└── default_inputs -- Copies of default stream and namelists files (Shared)
-
-Model cores are typically developed independently. For information about
-building and running a particular core, please refer to that core's user's
-guide.
+1. What I Have Done So Far
+• Installed required tools: Git, MPI (mpicc, mpirun), GNU compilers.
+• Cloned the MPAS-Model repository from GitHub.
+• Installed and configured Parallel-NetCDF (PNETCDF).
+• Set the PNETCDF environment variable so the Makefile can find libraries and headers.
+• Compiled the atmosphere core using:
+make -j 4 gnu CORE=atmosphere
+• Linked the atmosphere_model executable into the global_240km directory.
+• Tried running the model with:
+mpirun -n 1 ./atmosphere_model
+------------------------------------------------------------
+2. Problems I Faced
+Problem 1: PNETCDF environment variable not set
+Solution: Installed PnetCDF and exported:
+export PNETCDF=/usr
+Problem 2: Build incompatibility error
+Solution: Used:
+make gnu CORE=atmosphere AUTOCLEAN=true
+Problem 4: Missing input files
+Some required files were missing:
+x1.40962.sfc_update.nc
+I tried:
+• Renaming init.nc to x1.40962.init.nc
+• Modifying namelist.atmosphere
+• Modifying streams.atmosphere
+• Running without MPI
+But the model still stops.
+3. What is namelist.atmosphere?
+The namelist.atmosphere file controls:
+• Simulation start time
+• Run duration
+• Time step (dt)
+• Physics options
+• Output settings
+It tells the model HOW to run.What is streams.atmosphere?
+4. The streams.atmosphere file tells the model:
+• Which input files to read
+• What output files to write
+• When to write output
+It defines all NetCDF files used during simulation.
+5. What is init file?The init file (example: x1.40962.init.nc) contains:
+• Initial atmospheric conditions
+• Grid information
+• Temperature, pressure, wind fields
+Without this file, the model cannot start.
+6. Current Status
+• Model compiles successfully.
+• MPI works.
+• Main issue: Missing required input/static files for the 240 km setup.
+• The executable runs but aborts due to missing or mismatched files.
+7. Downloading Example Input Files
+ Downloaded prepared input files for the global_240km test case:
+wget https://www2.mmm.ucar.edu/people/duda/files/mpas/global_240km.tar.bz2
+tar -xvjf global_240km.tar.bz2
+Linked the compiled executable to the test case directory:
+cd global_240km
+ln -s ../atmosphere_model .
+ Running the Test Simulation
+ Executed the model using
+1
+MPI task:
+mpirun -n 1 ./atmosphere_model
+MPAS created a log file
+log.atmosphere.0000.out where all output messages are written.
+ Monitored the simulation using:
+tail -f log.atmosphere.0000.out
+8. Error Encountered
+CRITICAL ERROR: Could not open input file 'x1.40962.init.nc' to read mesh fields
+• MPAS could not find the mesh file, so the simulation stopped immediately.
+• Without the mesh file, the model cannot run because it doesn’t know the grid.
