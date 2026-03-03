@@ -199,6 +199,34 @@ Result:
 
 ---
 
+## 10. Automation Using Shell Script
+
+To simplify setup and ensure reproducibility, a shell script `setup_mpas.sh` has been provided.  
+
+This script performs the following tasks:
+
+- Clones the MPAS-Model repository
+- Sets the required PNETCDF environment variable
+- Cleans previous builds
+- Compiles the atmosphere core
+- Downloads the `global_240km` test case
+- Links the executable in the test case directory
+
+### How to use
+
+1. Make the script executable: 
+
+```bash
+chmod +x setup_mpas.sh
+```
+2. Run the script:
+
+```bash
+./setup_mpas.sh
+```
+---
+
+---
 
 ## 11. Notes
 
