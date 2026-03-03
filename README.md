@@ -1,132 +1,206 @@
-What I Have Done So Far
+# MPAS-A Setup and Initial Testing
 
-Installed required tools: Git, MPI (mpicc, mpirun), GNU compilers
+## Overview
 
-Cloned the MPAS-Model repository from GitHub
+This repository documents the setup, compilation, and initial testing of the MPAS-Atmosphere model on a Linux system using GNU compilers and MPI.
 
-Installed and configured Parallel-NetCDF (PNETCDF)
+The goal is to create a reproducible workflow for building and running MPAS, while documenting issues encountered and solutions applied.
 
-Set the PNETCDF environment variable so the Makefile can find libraries and headers
+---
 
-Compiled the atmosphere core using:
+## 1. System Requirements
 
-make -j 4 gnu CORE=atmosphere
+The following tools were installed on the system:
 
-Linked the atmosphere_model executable into the global_240km directory
+- **Git**
+- **GNU Compilers** (`gcc`, `gfortran`)
+- **MPI** (`mpicc`, `mpirun`)
+- **NetCDF**
+- **Parallel-NetCDF (PNETCDF)**
 
-Tried running the model with:
+---
 
-mpirun -n 1 ./atmosphere_model
-Problems I Faced
+## 2. Repository Setup
 
-Problem 1: PNETCDF environment variable not set
+Clone the MPAS repository:
 
-Solution: Installed PnetCDF and exported:
+```bash
+git clone https://github.com/MPAS-Dev/MPAS-Model.git
+cd MPAS-Model
+```
 
+---
+
+## 3. Setting Up PNETCDF
+
+Set the required environment variable:
+
+```bash
 export PNETCDF=/usr
+```
 
-Problem 2: Build incompatibility error
+Verify:
 
-Solution: Used:
+```bash
+echo $PNETCDF
+```
 
-make gnu CORE=atmosphere AUTOCLEAN=true
+---
 
-Problem 3: Missing input files
+## 4. Compiling MPAS (Atmosphere Core)
 
-Some required files were missing, e.g., x1.40962.sfc_update.nc
+Clean previous builds automatically and compile the atmosphere core:
 
-Tried:
+```bash
+make -j4 gnu CORE=atmosphere AUTOCLEAN=true
+```
 
-Renaming init.nc to x1.40962.init.nc
+This produces the executable:
 
-Modifying namelist.atmosphere
+```bash
+atmosphere_model
+```
 
-Modifying streams.atmosphere
+---
 
-Running without MPI
+## 5. Compiling `init_atmosphere` (Optional)
 
-Outcome: Model still stops due to missing or mismatched files
+If generating new initialization files:
 
-Key Files
-What is namelist.atmosphere?
+```bash
+make clean
+make -j4 gnu CORE=init_atmosphere
+```
 
-The namelist.atmosphere file controls:
+This produces:
 
-Simulation start time
+```bash
+init_atmosphere_model
+```
 
-Run duration
+---
 
-Time step (dt)
+## 6. Running the `global_240km` Test Case
 
-Physics options
+Download the example test case:
 
-Output settings
+```bash
+wget https://www2.mmm.ucar.edu/people/duda/files/mpas/global_240km.tar.bz2
+tar -xvjf global_240km.tar.bz2
+```
 
-It tells the model how to run.
+Link the executable:
 
-What is streams.atmosphere?
+```bash
+cd global_240km
+ln -s ../atmosphere_model .
+```
 
-The streams.atmosphere file defines:
+Run with MPI:
 
-Which input files to read
+```bash
+mpirun -n 1 ./atmosphere_model
+```
 
-What output files to write
+Monitor output:
 
-When to write output
+```bash
+tail -f log.atmosphere.0000.out
+```
 
-It defines all NetCDF files used during simulation.
+---
 
-What is an init file?
+## 7. Important Configuration Files
 
-The init file (example: x1.40962.init.nc) contains:
+### `namelist.atmosphere`
 
-Initial atmospheric conditions
+Controls:
 
-Grid information
+- Simulation start time  
+- Run duration  
+- Time step  
+- Physics options  
+- Output configuration  
 
-Temperature, pressure, and wind fields
+### `streams.atmosphere`
+
+Defines:
+
+- Input files  
+- Output files  
+- File writing frequency  
+
+### Initialization File
+
+Example:
+
+```
+x1.40962.init.nc
+```
+
+This file contains:
+
+- Mesh/grid information  
+- Initial atmospheric state  
+- Temperature, pressure, wind fields  
 
 Without this file, the model cannot start.
 
-Current Status
+---
 
-Model compiles successfully
+## 8. Problems Encountered
 
-MPI works
+### Issue 1 – PNETCDF Not Set
 
-Main issue: Missing required input/static files for the 240 km setup
+Error: Compilation failure due to missing PNETCDF.
 
-Executable runs but aborts due to missing or mismatched files
+**Solution:**
 
-Downloading Example Input Files
+```bash
+export PNETCDF=/usr
+```
 
-Downloaded prepared input files for the global_240km test case:
+---
 
-wget https://www2.mmm.ucar.edu/people/duda/files/mpas/global_240km.tar.bz2
-tar -xvjf global_240km.tar.bz2
+### Issue 2 – Build Incompatibility
 
-Linked the compiled executable to the test case directory:
+**Solution:**
 
-cd global_240km
-ln -s ../atmosphere_model .
-Running the Test Simulation
+```bash
+make -j4 gnu CORE=atmosphere AUTOCLEAN=true
+```
 
-Executed the model using 1 MPI task:
+---
 
-mpirun -n 1 ./atmosphere_model
+### Issue 3 – Missing Input File
 
-MPAS created a log file: log.atmosphere.0000.out
+Error:
 
-Monitored the simulation using:
+```
+CRITICAL ERROR: Could not open input file 'x1.40962.init.nc'
+```
 
-tail -f log.atmosphere.0000.out
-Error Encountered
+Cause: 
 
-CRITICAL ERROR: Could not open input file x1.40962.init.nc to read mesh fields
+- Missing or incorrectly linked initialization file  
 
-MPAS could not find the mesh file, so the simulation stopped immediately
+Result:
 
-Without the mesh file, the model cannot run because it doesn’t know the grid
+- Model aborts before simulation starts  
+
+---
+
+## 9. Current Status
+
+- Model compiles successfully  
+- MPI execution works  
+- Executable launches correctly  
+- Remaining issue: Missing or mismatched input/static files for the 240 km case  
+
+---
 
 
+## 11. Notes
 
+- Large data files are **not uploaded** to this repository.
+- Only configuration files, scripts, and documentation are tracked.
