@@ -194,8 +194,11 @@ Result:
 
 - Model compiles successfully  
 - MPI execution works  
-- Executable launches correctly  
-- Remaining issue: Missing or mismatched input/static files for the 240 km case  
+- Executable launches correctly 
+- `Global-240km` test case run succesfully after restoring the correct input filename(init.nc) in stream.atmosphere.
+- log files generated correctly in global-240km directory.
+  - log.atmosphere.0000.out (standard output)
+  - log.atmosphere.0000.err (standard error if any). 
 
 ---
 
@@ -226,6 +229,45 @@ chmod +x setup_mpas.sh
 ```
 ---
 
+---
+# 11- MPAS-Atmosphere Model – Horizontal Divergence Modification
+
+I modified the **horizontal mass-flux divergence calculation** in `mpas_atm_time_integration.F` to simplify the code and improve performance.  
+
+---
+
+## What Was Changed
+Previously, the code computed horizontal divergence in **two separate loops**:
+
+1. Loop 1: accumulate `h_divergence` using edge flux `ru(k,iEdge)`.
+2. Loop 2: multiply by `r = 1 / AreaCell` to scale the divergence.
+
+**Modification:**  
+
+- Combined both steps into **one loop** by multiplying by `r` during accumulation.  
+- This reduces the number of loops and simplifies the OpenACC parallel regions.  
+- The old code is kept **commented** for reference.  
+
+---
+
+## Why This Change
+- Makes the code more **efficient** (fewer loops).  
+- Easier to **read and maintain**.  
+- Produces **numerically identical results** to the original code.  
+
+---
+
+## OutputFiles
+- the output from differnet runs are stored in seperate files for comaprison.
+- `Original_output.log` output from the original code before modification.
+- `new_output.log` output from modified/fused divergence code.
+
+you can compare them using:
+
+```bash
+diff original_output.log new_output.log
+
+```
 ---
 
 ## 11. Notes

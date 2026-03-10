@@ -5317,8 +5317,9 @@ module atm_time_integration
             edge_sign = edgesOnCell_sign(i,iCell) * dvEdge(iEdge)
 !DIR$ IVDEP
             !$acc loop vector
+            r = invAreaCell(iCell)
             do k=1,nVertLevels
-               h_divergence(k,iCell) = h_divergence(k,iCell) + edge_sign * ru(k,iEdge)
+               h_divergence(k,iCell) = h_divergence(k,iCell) + edge_sign * ru(k,iEdge) * r
             end do
          end do
       end do
@@ -5328,13 +5329,13 @@ module atm_time_integration
 
       !$acc parallel default(present)
       !$acc loop gang worker
-      do iCell = cellStart,cellEnd
-         r = invAreaCell(iCell)
+       !do iCell = cellStart,cellEnd
+        !r = invAreaCell(iCell)
          !$acc loop vector
-         do k = 1,nVertLevels
-            h_divergence(k,iCell) = h_divergence(k,iCell) * r
-         end do
-      end do
+        !do k = 1,nVertLevels
+            !h_divergence(k,iCell) = h_divergence(k,iCell) * r
+         !end do
+      !end do
       !$acc end parallel
 
       !
