@@ -257,17 +257,28 @@ Previously, the code computed horizontal divergence in **two separate loops**:
 
 ---
 
-### OutputFiles
-- the output from differnet runs are stored in seperate files for comaprison.
-- `Original_output.log` output from the original code before modification.
-- `new_output.log` output from modified/fused divergence code.
+### 12- Comparing Simulation Outputs
 
-you can compare them using:
+After running the MPAS model, it is important to verify that any code changes or optimizations do not alter the scientific results. This can be done by comparing the NetCDF output files from the original and optimized runs.
+
+### 12.1 Setting Up the Python Environment
+
+Create and activate a Python virtual environment to isolate dependencies:
 
 ```bash
-diff original_output.log new_output.log
+python3 -m venv mpas-venv
+source mpas-venv/bin/activate
 
+python3 -m pip install --upgrade pip
+pip install ncompare
 ```
+
+#### To compare individual NetCDF files from different runs:
+```bash
+ncompare original_run/history.2014-09-15_00.00.00.nc \
+         optimize_run/history.2014-09-15_00.00.00.nc --summary
+```
+
 ---
 
 ## 11. Notes

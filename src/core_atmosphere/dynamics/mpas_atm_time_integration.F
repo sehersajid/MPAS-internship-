@@ -5302,6 +5302,9 @@ module atm_time_integration
 
       ! accumulate horizontal mass-flux
 
+#if 0
+      ! ORIGINAL CODE 
+
       !$acc parallel default(present)
       !$acc loop gang worker
       do iCell=cellStart,cellEnd
@@ -5315,28 +5318,61 @@ module atm_time_integration
          do i=1,nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i,iCell)
             edge_sign = edgesOnCell_sign(i,iCell) * dvEdge(iEdge)
-!DIR$ IVDEP
+
             !$acc loop vector
-            r = invAreaCell(iCell)
+            do k=1,nVertLevels
+               h_divergence(k,iCell) = h_divergence(k,iCell) + edge_sign * ru(k,iEdge)
+            end do
+         end do
+
+      end do
+      !$acc end parallel
+
+      !compute horizontal mass-flux divergence, add vertical mass flux divergence to complete tend_rho
+      !$acc parallel default(present)
+      !$acc loop gang worker
+      do iCell = cellStart,cellEnd
+
+         r = invAreaCell(iCell)
+
+         !$acc loop vector
+         do k = 1,nVertLevels
+            h_divergence(k,iCell) = h_divergence(k,iCell) * r
+         end do
+
+      end do
+      !$acc end parallel
+
+#else
+      ! NEW OPTIMIZED CODE
+
+      !$acc parallel default(present)
+      !$acc loop gang worker
+      do iCell=cellStart,cellEnd
+
+         r = invAreaCell(iCell)   
+
+         !$acc loop vector
+         do k=1,nVertLevels
+            h_divergence(k,iCell) = 0.0_RKIND
+         end do
+
+         !$acc loop seq
+         do i=1,nEdgesOnCell(iCell)
+            iEdge = edgesOnCell(i,iCell)
+            edge_sign = edgesOnCell_sign(i,iCell) * dvEdge(iEdge)
+
+            !$acc loop vector
             do k=1,nVertLevels
                h_divergence(k,iCell) = h_divergence(k,iCell) + edge_sign * ru(k,iEdge) * r
             end do
          end do
+
       end do
       !$acc end parallel
 
-      ! compute horiontal mass-flux divergence, add vertical mass flux divergence to complete tend_rho
+#endif     
 
-      !$acc parallel default(present)
-      !$acc loop gang worker
-       !do iCell = cellStart,cellEnd
-        !r = invAreaCell(iCell)
-         !$acc loop vector
-        !do k = 1,nVertLevels
-            !h_divergence(k,iCell) = h_divergence(k,iCell) * r
-         !end do
-      !end do
-      !$acc end parallel
 
       !
       ! dp / dz and tend_rho
