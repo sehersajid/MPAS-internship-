@@ -5439,6 +5439,7 @@ module atm_time_integration
          wduz(nVertLevels+1) = 0.
 
 !DIR$ IVDEP
+#if 1
          !$acc loop vector
          do k=1,nVertLevels
             tend_u(k,iEdge) = - rdzw(k)*(wduz(k+1)-wduz(k)) !  first use of tend_u
@@ -5450,6 +5451,16 @@ module atm_time_integration
          do k=1,nVertLevels
             q(k) = 0.0_RKIND
          end do
+#else
+         !$acc loop vector
+         do k=1,nVertLevels
+            tend_u(k,iEdge) = - rdzw(k)*(wduz(k+1)-wduz(k)) !  first use of tend_u
+            ! Next, nonlinear Coriolis term (q) following Ringler et al JCP 2009
+            q(k) = 0.0_RKIND
+         end do
+#endif         
+
+         
 
          !$acc loop seq
          do j = 1,nEdgesOnEdge(iEdge)
