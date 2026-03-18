@@ -5454,7 +5454,7 @@ module atm_time_integration
 #else
          !$acc loop vector
          do k=1,nVertLevels
-            tend_u(k,iEdge) = - rdzw(k)*(wduz(k+1)-wduz(k)) !  first use of tend_u
+            tend_u(k,iEdge) = - rdzw(k)*(wduz(k+1)-wduz(k))  !  first use of tend_u
             ! Next, nonlinear Coriolis term (q) following Ringler et al JCP 2009
             q(k) = 0.0_RKIND
          end do
@@ -5600,6 +5600,8 @@ module atm_time_integration
 
 #endif
 
+#if 0
+         !----original code------
          if (h_mom_eddy_visc4 > 0.0) then  ! 4th order mixing is active
 
 !$OMP BARRIER
@@ -5647,6 +5649,49 @@ module atm_time_integration
                end do
             end do
             !$acc end parallel
+
+#else
+         !------new fused code-------
+         if (h_mom_eddy_visc4 > 0.0) then  ! 4th order mixing is active
+
+!$OMP BARRIER
+
+            !$acc parallel default(present)
+            !$acc loop gang worker
+            do iVertex=vertexStart,vertexEnd
+
+               !$acc loop seq
+               do i=1,vertexDegree
+                  iEdge = edgesOnVertex(i,iVertex)
+                  edge_sign = invAreaTriangle(iVertex) * dcEdge(iEdge) * edgesOnVertex_sign(i,iVertex)
+                  
+                  !$acc loop vector
+                  do k=1,nVertLevels
+                     if (i == 1) delsq_vorticity(k,iVertex) = 0.0_RKIND
+                     delsq_vorticity(k,iVertex) = delsq_vorticity(k,iVertex) + edge_sign * delsq_u(k,iEdge)
+                  end do
+               end do
+            end do
+
+            !$acc loop gang worker
+            do iCell=cellStart,cellEnd
+               r = invAreaCell(iCell)
+
+               !$acc loop seq
+               do i=1,nEdgesOnCell(iCell)
+                  iEdge = edgesOnCell(i,iCell)
+                  edge_sign = r * dvEdge(iEdge) * edgesOnCell_sign(i,iCell)
+
+                  !$acc loop vector
+                  do k=1,nVertLevels
+                     if (i == 1) delsq_divergence(k,iCell) = 0.0_RKIND
+                     delsq_divergence(k,iCell) = delsq_divergence(k,iCell) + edge_sign * delsq_u(k,iEdge)
+                  end do
+               end do
+            end do
+            !$acc end parallel     
+
+#endif                   
          
 !$OMP BARRIER
 
