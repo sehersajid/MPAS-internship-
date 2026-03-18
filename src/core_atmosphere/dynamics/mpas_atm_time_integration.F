@@ -5439,7 +5439,7 @@ module atm_time_integration
          wduz(nVertLevels+1) = 0.
 
 !DIR$ IVDEP
-#if 1
+#if 0
          !$acc loop vector
          do k=1,nVertLevels
             tend_u(k,iEdge) = - rdzw(k)*(wduz(k+1)-wduz(k)) !  first use of tend_u
@@ -5497,6 +5497,8 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+#if 0
+      !--------- Original Code --------
       !
       !  horizontal mixing for u
       !  mixing terms are integrated using forward-Euler, so this tendency is only computed in the
@@ -5550,6 +5552,53 @@ module atm_time_integration
             end do
          end do
          !$acc end parallel
+
+#else
+      !--------- New Fused Code --------
+      !  horizontal mixing for u
+      !  mixing terms are integrated using forward-Euler, so this tendency is only computed in the
+      !  first Runge-Kutta substep and saved for use in later RK substeps 2 and 3.
+      !
+
+      if (rk_step == 1) then
+
+!$OMP BARRIER
+
+         ! del^4 horizontal filter.  We compute this as del^2 ( del^2 (u) ).
+         ! First, storage to hold the result from the first del^2 computation.
+
+         !$acc parallel default(present)
+         !$acc loop gang worker
+         do iEdge=edgeStart,edgeEnd
+            cell1 = cellsOnEdge(1,iEdge)
+            cell2 = cellsOnEdge(2,iEdge)
+            vertex1 = verticesOnEdge(1,iEdge)
+            vertex2 = verticesOnEdge(2,iEdge)
+            r_dc = invDcEdge(iEdge)
+            r_dv = min(invDvEdge(iEdge), 4*invDcEdge(iEdge))     
+
+!DIR$ IVDEP
+            !$acc loop vector
+            do k=1,nVertLevels
+                delsq_u(k,iEdge) = 0.0_RKIND
+               ! Compute diffusion, computed as \nabla divergence - k \times \nabla vorticity
+               !                    only valid for h_mom_eddy_visc4 == constant
+              u_diffusion =   ( divergence(k,cell2)  - divergence(k,cell1) ) * r_dc  &
+                              -( vorticity(k,vertex2) - vorticity(k,vertex1) ) * r_dv
+
+               delsq_u(k,iEdge) = delsq_u(k,iEdge) + u_diffusion
+
+               kdiffu = 0.5*(kdiff(k,cell1)+kdiff(k,cell2))
+
+               ! include 2nd-orer diffusion here 
+               tend_u_euler(k,iEdge) = tend_u_euler(k,iEdge) &
+                                       + rho_edge(k,iEdge)* kdiffu * u_diffusion * meshScalingDel2(iEdge)
+
+            end do
+         end do
+         !$acc end parallel         
+
+#endif
 
          if (h_mom_eddy_visc4 > 0.0) then  ! 4th order mixing is active
 
