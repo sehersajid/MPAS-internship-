@@ -5880,7 +5880,7 @@ module atm_time_integration
                flux_arr(k) = 0.0_RKIND
                if(k>=2) then
                   ru_edge_w(k) = fzm(k)*ru(k,iEdge) + fzp(k)*ru(k-1,iEdge)
-               endif
+               end if
             end do
 #endif            
             ! flux_arr stores the value of w at the cell edge used in the horizontal transport
