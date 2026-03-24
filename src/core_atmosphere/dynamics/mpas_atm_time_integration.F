@@ -5864,7 +5864,7 @@ module atm_time_integration
 
             iEdge = edgesOnCell(i,iCell)
             edge_sign = edgesOnCell_sign(i,iCell) * dvEdge(iEdge) * 0.5
-#if 1
+#if 0
             !$acc loop vector
             do k=2,nVertLevels
                ru_edge_w(k) = fzm(k)*ru(k,iEdge) + fzp(k)*ru(k-1,iEdge)
@@ -6041,7 +6041,7 @@ module atm_time_integration
          wdwz(nVertLevels+1) = 0.0
 
       !  Note: next we are also dividing through by the cell area after the horizontal flux divergence
-
+#if 0
 !DIR$ IVDEP
          !$acc loop vector
          do k=2,nVertLevels
@@ -6057,7 +6057,18 @@ module atm_time_integration
                                          - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.
             end do
           end if
-
+#else
+ !DIR$ IVDEP
+            !$acc loop vector
+            do k=2,nVertLevels
+            tend_w(k,iCell) = tend_w(k,iCell) * invAreaCell(iCell) -rdzu(k)*(wdwz(k+1)-wdwz(k))
+            if(rk_step == 1) then
+              tend_w_euler(k,iCell) = tend_w_euler(k,iCell) - cqw(k,iCell)*(   &
+                                           rdzu(k)*(pp(k,iCell)-pp(k-1,iCell)) &
+                                         - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.
+            end if 
+            end do
+#endif         
       end do
       !$acc end parallel
 
