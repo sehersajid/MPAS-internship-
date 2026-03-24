@@ -11,6 +11,8 @@
 # 4. Compile the atmosphere core with AUTOCLEAN
 # 5. Download and extract the global_240km test case
 # 6. Link the executable into the test case directory
+# 7. Run the model
+# 8. Compare history files with ncompare
 # ===============================================
 
 # Stop execution if any command fails
@@ -23,7 +25,7 @@ cd MPAS-Model
 echo "=== Setting PNETCDF environment variable ==="
 export PNETCDF=/usr
 echo "PNETCDF set to $PNETCDF"
-
+chmod
 echo "=== Cleaning previous builds ==="
 make clean
 
@@ -40,3 +42,28 @@ ln -s ../atmosphere_model .
 
 echo "=== Setup complete ==="
 echo "You can now run the model with: mpirun -n 1 ./atmosphere_model"
+
+#activate MPAS virtual environment
+source ~/mpas-venv/bin/activate
+
+echo "running MPAS atmosphere model"
+mpirun -n 1 ./atmosphere_model
+echo "model run complete"
+
+# set path for original ad modified outputs
+Orig_dir="original_run"
+mod_dir="optimize_run"
+
+# compare output files
+
+for file in "$mod_dir"/history*.nc; do
+    fname=$(basename "$file")
+    if [ -f "$Orig_dir/$fname" ]; then
+        echo "=== Comparing $fname ==="
+        ncompare "$file" "$Orig_dir/$fname"
+    else
+        echo "File $fname not found in $Orig_dir, skipping."
+    fi
+done
+
+echo "Comparison done."
