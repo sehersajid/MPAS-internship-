@@ -5864,7 +5864,7 @@ module atm_time_integration
 
             iEdge = edgesOnCell(i,iCell)
             edge_sign = edgesOnCell_sign(i,iCell) * dvEdge(iEdge) * 0.5
-
+#if 1
             !$acc loop vector
             do k=2,nVertLevels
                ru_edge_w(k) = fzm(k)*ru(k,iEdge) + fzp(k)*ru(k-1,iEdge)
@@ -5874,7 +5874,15 @@ module atm_time_integration
             do k=1,nVertLevels
                flux_arr(k) = 0.0_RKIND
             end do
-
+#else
+            !$acc loop vector
+            do k=1,nVertLevels
+               flux_arr(k) = 0.0_RKIND
+               if(k>=2) then
+                  ru_edge_w(k) = fzm(k)*ru(k,iEdge) + fzp(k)*ru(k-1,iEdge)
+               endif
+            end do
+#endif            
             ! flux_arr stores the value of w at the cell edge used in the horizontal transport
 
             !$acc loop seq
