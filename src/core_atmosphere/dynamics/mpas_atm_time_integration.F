@@ -6147,7 +6147,7 @@ module atm_time_integration
                tend_theta(k,iCell) = tend_theta(k,iCell) - edgesOnCell_sign(i,iCell) * ru(k,iEdge) * flux_arr(k)
             end do
 
-         end do
+         end do   
       end do
       !$acc end parallel
 
@@ -6580,85 +6580,7 @@ module atm_time_integration
 
       !
       ! Compute height on cell edges at velocity locations
-      !
-      MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      !$acc enter data create(h_edge,vorticity,divergence)
-      MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      !$acc parallel default(present)
-      !$acc loop gang
-      do iEdge=edgeStart,edgeEnd
-         cell1 = cellsOnEdge(1,iEdge)
-         cell2 = cellsOnEdge(2,iEdge)
-!DIR$ IVDEP
-         !$acc loop vector
-         do k=1,nVertLevels
-            h_edge(k,iEdge) = 0.5 * (h(k,cell1) + h(k,cell2))
-         end do
-
-!  the first openmp barrier below is set so that ke_edge is computed
-!  it would be good to move this somewhere else?
-
-         efac = dcEdge(iEdge)*dvEdge(iEdge)
-         !$acc loop vector
-         do k=1,nVertLevels
-            ke_edge(k,iEdge) = efac*u(k,iEdge)**2
-         end do
-
-      end do
-
-      !
-      ! Compute circulation and relative vorticity at each vertex
-      !
-      !$acc loop gang
-      do iVertex=vertexStart,vertexEnd
-         !$acc loop vector
-         do k=1,nVertLevels
-            vorticity(k,iVertex) = 0.0_RKIND
-         end do
-         !$acc loop seq
-         do i=1,vertexDegree
-            iEdge = edgesOnVertex(i,iVertex)
-            s = edgesOnVertex_sign(i,iVertex) * dcEdge(iEdge)
-!DIR$ IVDEP
-            !$acc loop vector
-            do k=1,nVertLevels
-               vorticity(k,iVertex) = vorticity(k,iVertex) + s * u(k,iEdge)
-            end do
-         end do
-!DIR$ IVDEP
-         !$acc loop vector
-         do k=1,nVertLevels
-            vorticity(k,iVertex) = vorticity(k,iVertex) * invAreaTriangle(iVertex)
-         end do
-      end do
-
-
-      !
-      ! Compute the divergence at each cell center
-      !
-      !$acc loop gang
-      do iCell=cellStart,cellEnd
-         !$acc loop vector
-         do k=1,nVertLevels
-            divergence(k,iCell) = 0.0_RKIND
-         end do
-         !$acc loop seq
-         do i=1,nEdgesOnCell(iCell)
-            iEdge = edgesOnCell(i,iCell)
-            s = edgesOnCell_sign(i,iCell) * dvEdge(iEdge)
-!DIR$ IVDEP
-            !$acc loop vector
-            do k=1,nVertLevels
-              divergence(k,iCell) = divergence(k,iCell) + s * u(k,iEdge)
-            end do
-         end do
-         r = invAreaCell(iCell)
-         !$acc loop vector
-         do k = 1,nVertLevels
-            divergence(k,iCell) = divergence(k,iCell) * r
-         end do
-      end do
-      !$acc end parallel
+  
 
 
 !$OMP BARRIER
@@ -7100,7 +7022,7 @@ module atm_time_integration
          end do
       end do
       !$acc end parallel
-
+#if 0
       !$acc parallel default(present)
       !$acc loop collapse(2)
       do iCell=cellStart,cellEnd
@@ -7151,6 +7073,36 @@ module atm_time_integration
          end do
       end do
       !$acc end parallel
+
+#else
+       !$acc parallel default(present)
+      !$acc loop collapse(2)
+      do iCell=cellStart,cellEnd
+         do k=1,nVertLevels
+            rho_p(k,iCell) = rho_zz(k,iCell) - rho_base(k,iCell)
+            rtheta_base(k,iCell) = theta_base(k,iCell) * rho_base(k,iCell)
+            rtheta_p(k,iCell) = theta_m(k,iCell) * rho_p(k,iCell)  &
+                                             + rho_base(k,iCell)   * (theta_m(k,iCell) - theta_base(k,iCell))
+         end do
+      end do
+      !$acc end parallel
+
+      !$acc parallel default(present)
+      !$acc loop collapse(2)
+      do iCell=cellStart,cellEnd
+         do k=1,nVertLevels
+            exner(k,iCell) = (zz(k,iCell) * (rgas/p0) * (rtheta_p(k,iCell) + rtheta_base(k,iCell)))**rcv
+            exner_base(k,iCell) = (zz(k,iCell) * (rgas/p0) * (rtheta_base(k,iCell)))**rcv  ! WCS addition 20180403
+            pressure_p(k,iCell) = zz(k,iCell) * rgas &
+                                               * (  exner(k,iCell) * rtheta_p(k,iCell) &
+                                                  + rtheta_base(k,iCell) * (exner(k,iCell) - exner_base(k,iCell)) &
+                                                 )
+            pressure_base(k,iCell) = zz(k,iCell) * rgas * exner_base(k,iCell) * rtheta_base(k,iCell)      ! WCS addition 20180403
+         end do
+      end do
+      !$acc end parallel
+
+#endif      
 
       MPAS_ACC_TIMER_START('atm_init_coupled_diagnostics [ACC_data_xfer]')
       ! delete invariant fields
