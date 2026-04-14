@@ -2092,6 +2092,7 @@ module atm_time_integration
 
       !$acc parallel default(present)
       !$acc loop gang worker
+      !$pos kernal(fusable, depth=1)
 !      do iCell = cellSolveStart,cellSolveEnd
       do iCell = cellStart,cellEnd
          !$acc loop vector
@@ -2105,6 +2106,7 @@ module atm_time_integration
       end do    
       !$acc end parallel
 
+      !$pos kernal(target, depth=1)
 !      do iCell = cellSolveStart,cellSolveEnd
       !$acc parallel default(present)
       !$acc loop gang worker
@@ -2795,6 +2797,8 @@ module atm_time_integration
 
         !$acc parallel default(present)
         !$acc loop gang worker
+
+        !$pos kernal(fusable, depth=1)
         do iEdge=edgeStart,edgeEnd ! MGD do we really just need edges touching owned cells?
 
            cell1 = cellsOnEdge(1,iEdge)
@@ -2845,6 +2849,8 @@ module atm_time_integration
 
       !$acc parallel default(present)
       !$acc loop gang worker private(ts,rs)
+
+      !$pos kernal(target, depth=1)
       do iCell=cellSolveStart,cellSolveEnd  ! loop over all owned cells to solve
 
          if(small_step == 1) then  ! initialize here on first small timestep.
