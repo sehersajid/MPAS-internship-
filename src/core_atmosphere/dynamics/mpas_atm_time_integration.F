@@ -2092,7 +2092,8 @@ module atm_time_integration
 
       !$acc parallel default(present)
       !$acc loop gang worker
-      !$pos kernal(fusable, depth=1)
+
+      !$pos kernal(fusable, depth=1)                     
 !      do iCell = cellSolveStart,cellSolveEnd
       do iCell = cellStart,cellEnd
          !$acc loop vector
@@ -2120,6 +2121,8 @@ module atm_time_integration
       !$acc end parallel
 
 !  would need to compute qtot for all cells and an openmp barrier to use qtot below.
+
+      
 
       !$acc parallel default(present)
       !$acc loop gang worker
@@ -2798,7 +2801,7 @@ module atm_time_integration
         !$acc parallel default(present)
         !$acc loop gang worker
 
-        !$pos kernal(fusable, depth=1)
+        !$pos kernel(fusable, depth=1)
         do iEdge=edgeStart,edgeEnd ! MGD do we really just need edges touching owned cells?
 
            cell1 = cellsOnEdge(1,iEdge)
@@ -2809,11 +2812,14 @@ module atm_time_integration
 
 !DIR$ IVDEP
               !$acc loop vector
+              !$pos kernel(fusable, depth=2)
               do k=1,nVertLevels
                  ru_p(k,iEdge) = dts*tend_ru(k,iEdge)
               end do
 !DIR$ IVDEP
               !$acc loop vector
+
+               !$pos kernel(target, depth=2)
               do k=1,nVertLevels
                  ruAvg(k,iEdge) = ru_p(k,iEdge)
               end do
@@ -2850,7 +2856,7 @@ module atm_time_integration
       !$acc parallel default(present)
       !$acc loop gang worker private(ts,rs)
 
-      !$pos kernal(target, depth=1)
+      !$pos kernel(target, depth=1)
       do iCell=cellSolveStart,cellSolveEnd  ! loop over all owned cells to solve
 
          if(small_step == 1) then  ! initialize here on first small timestep.
@@ -4179,6 +4185,8 @@ module atm_time_integration
 
          !  begin with update of density
 
+         !$pos kernel(fusable, depth=1)
+
          !$acc loop gang worker
          do iCell=cellSolveStart,cellSolveEnd
 
@@ -4199,6 +4207,9 @@ module atm_time_integration
                
             end do
          end do
+
+
+         !$pos kernel(target, depth=1)
 
          !$acc loop gang worker
          do iCell=cellSolveStart,cellSolveEnd
@@ -5287,7 +5298,7 @@ module atm_time_integration
             !$acc loop gang worker
             do iCell = cellStart,cellEnd
                !
-               ! 2nd-order filter for top absorbing layer similar to that in CAM-SE :  WCS 10 May 2017, modified 7 April 2023
+               ! 2nd-order filter for top absorbing la   yer similar to that in CAM-SE :  WCS 10 May 2017, modified 7 April 2023
                ! From MPAS-CAM V4.0 code, with addition to config-specified coefficient (V4.0_coef = 0.2; SE_coef = 1.0)
                !
                !$acc loop vector
@@ -5303,46 +5314,7 @@ module atm_time_integration
             
       end if
 
-      ! tendency for density.
-      ! accumulate total water here for later use in w tendency calculation.
-
-      ! accumulate horizontal mass-flux
-
-      !$acc parallel default(present)
-      !$acc loop gang worker
-      do iCell=cellStart,cellEnd
-
-         !$acc loop vector
-         do k=1,nVertLevels
-            h_divergence(k,iCell) = 0.0_RKIND
-         end do
-
-         !$acc loop seq
-         do i=1,nEdgesOnCell(iCell)
-            iEdge = edgesOnCell(i,iCell)
-            edge_sign = edgesOnCell_sign(i,iCell) * dvEdge(iEdge)
-!DIR$ IVDEP
-            !$acc loop vector
-            do k=1,nVertLevels
-               h_divergence(k,iCell) = h_divergence(k,iCell) + edge_sign * ru(k,iEdge)
-            end do
-         end do
-      end do
-      !$acc end parallel
-
-      ! compute horiontal mass-flux divergence, add vertical mass flux divergence to complete tend_rho
-
-      !$acc parallel default(present)
-      !$acc loop gang worker
-      do iCell = cellStart,cellEnd
-         r = invAreaCell(iCell)
-         !$acc loop vector
-         do k = 1,nVertLevels
-            h_divergence(k,iCell) = h_divergence(k,iCell) * r
-         end do
-      end do
-      !$acc end parallel
-
+                                                
       !
       ! dp / dz and tend_rho
       !

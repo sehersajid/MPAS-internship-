@@ -60,4 +60,12 @@ stream_list.*
 *.i
 *.i90
 
+*.tar.bz2
+*.log
+global_240km/
+.git-rewrite/
+global_240km/
+global_240km.tar.bz2
+
 src/core_*/inc
+
