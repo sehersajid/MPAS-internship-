@@ -1,5 +1,7 @@
 # Ignore Files in the MPAS Direcory
 
+global_240km.tar.bz2
+
 # All pre-processed Fortran files in MPAS specific directories
 src/core_*/Registry_processed.xml
 src/core_*/*.f90
