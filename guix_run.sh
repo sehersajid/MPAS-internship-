@@ -21,4 +21,4 @@ fi
 
 cd "$GRIDDIR"
 
-mpirun -n 1 ../guix.sh ./atmosphere_model
+mpirun -n 1 ./atmosphere_model
