@@ -2801,7 +2801,7 @@ module atm_time_integration
         !$acc parallel default(present)
         !$acc loop gang worker
 
-        !$pos kernel(fusable, depth=1)
+        
         do iEdge=edgeStart,edgeEnd ! MGD do we really just need edges touching owned cells?
 
            cell1 = cellsOnEdge(1,iEdge)
@@ -2856,7 +2856,7 @@ module atm_time_integration
       !$acc parallel default(present)
       !$acc loop gang worker private(ts,rs)
 
-      !$pos kernel(target, depth=1)
+      
       do iCell=cellSolveStart,cellSolveEnd  ! loop over all owned cells to solve
 
          if(small_step == 1) then  ! initialize here on first small timestep.
@@ -2909,12 +2909,15 @@ module atm_time_integration
 
 !DIR$ IVDEP
             !$acc loop vector
+
+            !$pos kernel(fusable, depth=2)
             do k=2, nVertLevels
                wwAvg(k,iCell) = wwAvg(k,iCell) + 0.5*(1.0-epssm)*rw_p(k,iCell)
             end do
 
 !DIR$ IVDEP
             !$acc loop vector
+            !$pos kernel(target, depth=2)
             do k=2, nVertLevels
                rw_p(k,iCell) = rw_p(k,iCell) +  dts*tend_rw(k,iCell)                 &
                           - cofwz(k,iCell)*((zz(k  ,iCell)*ts(k)                     &
@@ -2945,6 +2948,7 @@ module atm_time_integration
 
 !DIR$ IVDEP
             !$acc loop vector
+            !$pos kernel(fusable, depth=2)
             do k=2,nVertLevels
                rw_p(k,iCell) = (rw_p(k,iCell) + (rw_save(k  ,iCell) - rw(k  ,iCell)) -dts*dss(k,iCell)* &
                            (fzm(k)*zz (k,iCell)+fzp(k)*zz (k-1,iCell))                                  &
@@ -2956,6 +2960,7 @@ module atm_time_integration
             ! accumulate (rho*omega)' for use later in scalar transport
 !DIR$ IVDEP
             !$acc loop vector
+            !$pos kernel(target, depth=2)
             do k=2,nVertLevels
                wwAvg(k,iCell) = wwAvg(k,iCell) + 0.5*(1.0+epssm)*rw_p(k,iCell)
             end do
