@@ -3283,6 +3283,8 @@ module atm_time_integration
       !
       integer :: i, iCell, iEdge, k, cell1, cell2
       real (kind=RKIND) :: invNs, rcv, p0, flux
+      real (kind=RKIND) :: local_ru_1, local_ru_2, local_ru_3
+      real (kind=RKIND) :: local_ru_k, local_ru_km1
 
       MPAS_ACC_TIMER_START('atm_recover_large_step_variables [ACC_data_xfer]')
       !$acc enter data copyin(rho_p_save,rho_pp,rho_base,rw_save,rw_p, &
@@ -3722,6 +3724,7 @@ module atm_time_integration
       integer, dimension(10) :: ica
 
       real (kind=RKIND) :: flux3, flux4
+      real (kind=RKIND) :: local_horiz_flux
       real (kind=RKIND) :: q_im2, q_im1, q_i, q_ip1, ua, coef3
 
       logical :: local_advance_density
@@ -3883,29 +3886,103 @@ module atm_time_integration
             end do
             end do
 
-            !$acc loop seq
-            do i=1,nEdgesOnCell(iCell)
-               iEdge = edgesOnCell(i,iCell)
+               !$acc loop seq
+      do i=1,nEdgesOnCell(iCell)
+         iEdge = edgesOnCell(i,iCell)
 
-               ! here we add the horizontal flux divergence into the scalar tendency.
-               ! note that the scalar tendency is modified.
+         ! Manual producer-consumer fusion:
+         ! Instead of reading horiz_flux_arr(iScalar,k,iEdge),
+         ! recompute the needed edge scalar value locally.
+
+         if ((.not.config_apply_lbcs) &
+            .or. (bdyMaskEdge(iEdge) < nRelaxZone-1)) then
+
+            select case(nAdvCellsForEdge(iEdge))
+
+            case(10)
+
                !$acc loop vector collapse(2)
                do k=1,nVertLevels
                   do iScalar=1,num_scalars
-                        scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) &
-                               - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge)*horiz_flux_arr(iScalar,k,iEdge)
+
+                     local_horiz_flux = &
+                        (adv_coefs(1,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(1,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(1,iEdge))  + &
+                        (adv_coefs(2,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(2,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(2,iEdge))  + &
+                        (adv_coefs(3,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(3,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(3,iEdge))  + &
+                        (adv_coefs(4,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(4,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(4,iEdge))  + &
+                        (adv_coefs(5,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(5,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(5,iEdge))  + &
+                        (adv_coefs(6,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(6,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(6,iEdge))  + &
+                        (adv_coefs(7,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(7,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(7,iEdge))  + &
+                        (adv_coefs(8,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(8,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(8,iEdge))  + &
+                        (adv_coefs(9,iEdge)  + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(9,iEdge))  * scalar_new(iScalar,k,advCellsForEdge(9,iEdge))  + &
+                        (adv_coefs(10,iEdge) + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(10,iEdge)) * scalar_new(iScalar,k,advCellsForEdge(10,iEdge))
+
+                     scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) &
+                        - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge) * local_horiz_flux
+
                   end do
                end do
 
-            end do
+            case default
+
+               !$acc loop vector collapse(2)
+               do k=1,nVertLevels
+                  do iScalar=1,num_scalars
+
+                     local_horiz_flux = 0.0_RKIND
+
+                     do j=1,nAdvCellsForEdge(iEdge)
+                        iAdvCell = advCellsForEdge(j,iEdge)
+                        scalar_weight = adv_coefs(j,iEdge) + sign(1.0_RKIND,uhAvg(k,iEdge))*adv_coefs_3rd(j,iEdge)
+                        local_horiz_flux = local_horiz_flux + scalar_weight * scalar_new(iScalar,k,iAdvCell)
+                     end do
+
+                     scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) &
+                        - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge) * local_horiz_flux
+
+                  end do
+               end do
+
+            end select
+
+         else if(config_apply_lbcs &
+               .and. (bdyMaskEdge(iEdge) >= nRelaxZone-1) &
+               .and. (bdyMaskEdge(iEdge) <= nRelaxZone)) then
+
+            cell1 = cellsOnEdge(1,iEdge)
+            cell2 = cellsOnEdge(2,iEdge)
 
             !$acc loop vector collapse(2)
             do k=1,nVertLevels
                do iScalar=1,num_scalars
-                     scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) * invAreaCell(iCell) &
-                                                   + scalar_tend_save(iScalar,k,iCell)
+
+                  u_direction = sign(0.5_RKIND,uhAvg(k,iEdge))
+                  u_positive = dvEdge(iEdge)*abs(u_direction + 0.5_RKIND)
+                  u_negative = dvEdge(iEdge)*abs(u_direction - 0.5_RKIND)
+
+                  local_horiz_flux = u_positive*scalar_new(iScalar,k,cell1) + &
+                                    u_negative*scalar_new(iScalar,k,cell2)
+
+                  scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) &
+                     - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge) * local_horiz_flux
+
                end do
             end do
+
+         else
+
+            ! Fallback: keep original behavior for any edge not covered above.
+            !$acc loop vector collapse(2)
+            do k=1,nVertLevels
+               do iScalar=1,num_scalars
+                  scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) &
+                     - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge) * horiz_flux_arr(iScalar,k,iEdge)
+               end do
+            end do
+
+         end if
+
+      end do
 
 
             !
