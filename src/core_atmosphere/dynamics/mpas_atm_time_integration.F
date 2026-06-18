@@ -2771,6 +2771,7 @@ module atm_time_integration
            if (cell1 <= nCellsSolve .or. cell2 <= nCellsSolve ) then
 
 !DIR$ IVDEP
+#if 0
               !$acc loop vector
               do k=1,nVertLevels
                  pgrad = ((rtheta_pp(k,cell2)-rtheta_pp(k,cell1))*invDcEdge(iEdge) )/(.5*(zz(k,cell2)+zz(k,cell1)))
@@ -2785,6 +2786,22 @@ module atm_time_integration
               do k=1,nVertLevels
                  ruAvg(k,iEdge) = ruAvg(k,iEdge) + ru_p(k,iEdge)
               end do
+
+#else
+               !$acc loop vector
+              do k=1,nVertLevels
+                 pgrad = ((rtheta_pp(k,cell2)-rtheta_pp(k,cell1))*invDcEdge(iEdge) )/(.5*(zz(k,cell2)+zz(k,cell1)))
+                 pgrad = cqu(k,iEdge)*0.5*c2*(exner(k,cell1)+exner(k,cell2))*pgrad
+                 pgrad = pgrad + 0.5*zxu(k,iEdge)*gravity*(rho_pp(k,cell1)+rho_pp(k,cell2))
+                 ru_p(k,iEdge) = ru_p(k,iEdge) + dts*(tend_ru(k,iEdge) - (1.0_RKIND - specZoneMaskEdge(iEdge))*pgrad)
+
+                 ruAvg(k,iEdge) = ruAvg(k,iEdge) + ru_p(k,iEdge)
+
+              end do
+
+              ! accumulate ru_p for use later in scalar transport
+
+#endif
 
            end if ! end test for block-owned cells
 
@@ -2802,7 +2819,7 @@ module atm_time_integration
 
            ! update edges for block-owned cells
            if (cell1 <= nCellsSolve .or. cell2 <= nCellsSolve ) then
-
+#if 0
 !DIR$ IVDEP
               !$acc loop vector
               do k=1,nVertLevels
@@ -2813,7 +2830,14 @@ module atm_time_integration
               do k=1,nVertLevels
                  ruAvg(k,iEdge) = ru_p(k,iEdge)
               end do
-
+#else
+!DIR$ IVDEP
+              !$acc loop vector
+              do k=1,nVertLevels
+                 ru_p(k,iEdge) = dts*tend_ru(k,iEdge)
+                 ruAvg(k,iEdge) = ru_p(k,iEdge)
+              end do
+#endif              
            end if ! end test for block-owned cells
 
         end do ! end loop over edges
