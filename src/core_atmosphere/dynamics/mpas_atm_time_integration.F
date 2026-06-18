@@ -3378,7 +3378,7 @@ module atm_time_integration
       ! we will compute ru and u here also, given we are here, even though we only need them on nEdgesSolve
 
 !$OMP BARRIER
-
+#if 0
       !$acc parallel default(present)
       !$acc loop gang worker
       do iEdge=edgeStart,edgeEnd
@@ -3439,6 +3439,81 @@ module atm_time_integration
 
       end do
       !$acc end parallel
+
+#else
+
+      !$acc parallel default(present)
+      !$acc loop gang worker
+      do iEdge=edgeStart,edgeEnd
+
+         cell1 = cellsOnEdge(1,iEdge)
+         cell2 = cellsOnEdge(2,iEdge)
+
+!DIR$ IVDEP
+         !$acc loop vector
+         do k = 1, nVertLevels
+            ruAvg(k,iEdge) = ru_save(k,iEdge) + (ruAvg(k,iEdge) * invNs)
+
+            local_ru_k = ru_save(k,iEdge) + ru_p(k,iEdge)
+            u(k,iEdge) = 2.*ru(k,iEdge)/(rho_zz(k,cell1)+rho_zz(k,cell2))
+         end do
+      end do
+      !$acc end parallel
+
+!$OMP BARRIER
+
+      !$acc parallel default(present)
+      !$acc loop gang worker
+      do iCell=cellStart,cellEnd
+
+         !  finish recovering w from (rho*omega)_p.  as when we formed (rho*omega)_p from u and w, we need
+         !  to use the same flux-divergence operator as is used for the horizontal theta transport
+         !  (See Klemp et al 2003).
+
+         if (bdyMaskCell(iCell) <= nRelaxZone) then  ! addition for regional_MPAS, no spec zone update
+
+            !$acc loop seq
+            do i=1,nEdgesOnCell(iCell)
+               iEdge=edgesOnCell(i,iCell)
+
+               local_ru_1 = ru_save(1,iEdge) + ru_p(1,iEdge)
+               local_ru_2 = ru_save(2,iEdge) + ru_p(2,iEdge)
+               local_ru_3 = ru_save(3,iEdge) + ru_p(3,iEdge)
+
+               flux = (cf1*local_ru_1 + cf2*local_ru_2 + cf3*local_ru_3)
+
+               w(1,iCell) = w(1,iCell) + edgesOnCell_sign(i,iCell) * &
+                         (zb_cell(1,i,iCell) + sign(1.0_RKIND,flux)*zb3_cell(1,i,iCell))*flux
+
+            !DIR$ IVDEP
+            !$acc loop vector
+            do k = 2, nVertLevels
+               local_ru_k   = ru_save(k  ,iEdge) + ru_p(k  ,iEdge)
+               local_ru_km1 = ru_save(k-1,iEdge) + ru_p(k-1,iEdge)
+
+               flux = (fzm(k)*local_ru_k + fzp(k)*local_ru_km1)
+
+               w(k,iCell) = w(k,iCell) + edgesOnCell_sign(i,iCell) * &
+                            (zb_cell(k,i,iCell)+sign(1.0_RKIND,flux)*zb3_cell(k,i,iCell))*flux
+            end do
+            
+         end do
+            w(1,iCell) = w(1,iCell)/(cf1*rho_zz(1,iCell)+cf2*rho_zz(2,iCell)+cf3*rho_zz(3,iCell))
+
+
+            !DIR$ IVDEP
+            !$acc loop vector
+            do k = 2, nVertLevels
+              w(k,iCell) = w(k,iCell)/(fzm(k)*rho_zz(k,iCell)+fzp(k)*rho_zz(k-1,iCell))
+            end do
+
+         end if ! addition for regional_MPAS, no spec zone update
+
+      end do
+      !$acc end parallel
+
+#endif
+
 
       MPAS_ACC_TIMER_START('atm_recover_large_step_variables [ACC_data_xfer]')
       !$acc exit data delete(rho_p_save,rho_pp,rho_base,rw_save,rw_p, &
