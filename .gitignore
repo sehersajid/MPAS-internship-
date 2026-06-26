@@ -7,6 +7,7 @@ src/framework/*.f90
 src/driver/*.f90
 src/operators/*.f90
 
+
 # All object files
 *.o
 
@@ -61,3 +62,11 @@ stream_list.*
 *.i90
 
 src/core_*/inc
+
+*.log
+run_bitwise_check.sh
+build_original.log
+build_scalar_flux_fusion.log
+build_manual_fusuion.log
+global_240km
+global_240km.tar.bz2
